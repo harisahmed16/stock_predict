@@ -118,7 +118,7 @@ if ticker:
     with st.spinner("Fetching stock and news sentiment data..."):
         try:
             price_df = fetch_stock_data(ticker, horizon=horizon)
-            sentiment_df = fetch_sentiment(ticker, NEWS_API_KEY, days=130)
+            sentiment_df = fetch_sentiment(ticker, NEWS_API_KEY, days=30)
         except Exception as e:
             st.error(f"❌ Failed to fetch data: {e}")
             st.stop()
