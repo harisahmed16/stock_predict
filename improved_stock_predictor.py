@@ -102,6 +102,8 @@ if ticker:
             st.stop()
 
         # Merge price + sentiment
+        price_df.index = price_df.index.tz_localize(None)
+        sentiment_df.index = sentiment_df.index.tz_localize(None)
         df = price_df.merge(sentiment_df, how="left", left_index=True, right_index=True)
         df["Sentiment"].fillna(0, inplace=True)
         df = prepare_data(df)
