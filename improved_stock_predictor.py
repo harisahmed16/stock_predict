@@ -11,13 +11,13 @@ from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import nltk
 import streamlit as st
 
-nltk.download("vader_lexicon")
+nltk.download("vader_lexicon", download_dir='/tmp')
+nltk.data.path.append('/tmp')
 
 # --- CONFIG ---
 NEWS_API_KEY = st.secrets["news_api_key"]  # You must store this in .streamlit/secrets.toml
 
 # --- FUNCTIONS ---
-
 def fetch_stock_data(ticker, period="120d", horizon=1):
     stock = yf.Ticker(ticker)
     df = stock.history(period=period)
@@ -91,6 +91,7 @@ st.title("🧠 Stock Price Predictor with News Sentiment")
 ticker = st.text_input("Enter stock ticker (e.g., AAPL)", value="AAPL")
 horizon = st.selectbox("Predict how many days ahead:", [1, 3, 5])
 model_name = st.selectbox("Choose regression model:", ["Random Forest", "Linear Regression"])
+show_clipped = st.toggle("🔒 Clip Next Prediction to +/-15% Range", value=True)
 
 if ticker:
     with st.spinner("Fetching stock and news sentiment data..."):
@@ -101,9 +102,11 @@ if ticker:
             st.error(f"❌ Failed to fetch data: {e}")
             st.stop()
 
-        # Merge price + sentiment
+        # Clean timezone
         price_df.index = price_df.index.tz_localize(None)
         sentiment_df.index = sentiment_df.index.tz_localize(None)
+
+        # Merge price + sentiment
         df = price_df.merge(sentiment_df, how="left", left_index=True, right_index=True)
         df["Sentiment"].fillna(0, inplace=True)
         df = prepare_data(df)
@@ -132,6 +135,17 @@ if ticker:
         latest_returns = df[[f"Lag{i}" for i in range(1, 6)] + [f"Sentiment_Lag{i}" for i in range(1, 6)]].iloc[-1:].values
         next_date = df.index[-1] + pd.Timedelta(days=1)
         next_pred = model.predict(latest_returns)[0]
+
+        recent_close = df['Close'].iloc[-1]
+        lower = recent_close * 0.85
+        upper = recent_close * 1.15
+
+        clipped_pred = np.clip(next_pred, lower, upper)
+
+        if show_clipped and clipped_pred != next_pred:
+            st.warning(f"🟠 Raw prediction (${next_pred:.2f}) clipped to ${clipped_pred:.2f} to stay within 15% of recent close (${recent_close:.2f})")
+            next_pred = clipped_pred
+
         ax.plot([next_date], [next_pred], marker='*', color='orange', markersize=12, label='Next Predicted Price')
 
     ax.set_title(f"{horizon}-Day Ahead Price Prediction with {model_name}")
@@ -157,3 +171,4 @@ if ticker:
         file_name=f"{ticker}_{horizon}day_{model_name.replace(' ', '_').lower()}_with_sentiment.csv",
         mime="text/csv"
     )
+
