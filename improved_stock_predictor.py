@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import requests
 import os
 import sqlite3
+import time
 from datetime import datetime, timedelta
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
@@ -77,10 +78,18 @@ def fetch_sentiment(ticker, api_key, days=30):
             response = requests.get(url)
             response.raise_for_status()
             data = response.json()
-        except requests.exceptions.RequestException as e:
-            st.warning(f"News API error on {date}: {e}")
-            all_data.append({"Date": date, "Sentiment": 0})
-            continue
+        except requests.exceptions.HTTPError as e:
+            if response.status_code == 429:
+                st.warning(f"429 Too Many Requests on {date} — using fallback sentiment = 0")
+                daily_score = 0
+                cursor.execute("INSERT OR REPLACE INTO sentiment_cache (ticker, date, sentiment) VALUES (?, ?, ?)", (ticker.upper(), date, daily_score))
+                conn.commit()
+                all_data.append({"Date": date, "Sentiment": daily_score})
+                continue
+            else:
+                st.warning(f"News API error on {date}: {e}")
+                all_data.append({"Date": date, "Sentiment": 0})
+                continue
 
         scores = []
         if data.get("articles"):
@@ -97,6 +106,7 @@ def fetch_sentiment(ticker, api_key, days=30):
         conn.commit()
 
         all_data.append({"Date": date, "Sentiment": daily_score})
+        time.sleep(1.1)  # throttle to stay under rate limit
 
     df = pd.DataFrame(all_data)
     df["Date"] = pd.to_datetime(df["Date"])
