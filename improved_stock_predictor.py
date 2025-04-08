@@ -6,7 +6,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
 import streamlit as st
 
-# Fetch data
+# Fetch stock data
 def fetch_stock_data(ticker, period="120d"):
     stock = yf.Ticker(ticker)
     df = stock.history(period=period)
@@ -16,7 +16,7 @@ def fetch_stock_data(ticker, period="120d"):
     df.dropna(inplace=True)
     return df
 
-# Create lag features
+# Prepare lag features
 def prepare_data(df):
     for i in range(1, 6):
         df[f'Lag{i}'] = df['Returns'].shift(i)
@@ -35,8 +35,6 @@ def train_model(df):
     predictions = model.predict(X_test)
     return model, X_test, y_test, predictions
 
-
-
 # Predict next day
 def predict_next_day(model, df):
     latest_features = df['Returns'].iloc[-5:].values[::-1].reshape(1, -1)
@@ -48,12 +46,11 @@ def predict_next_day(model, df):
 
 # Streamlit UI
 st.set_page_config(page_title="Stock Predictor", layout="centered")
-st.title("Short-Term Stock Direction Predictor")
+st.title("📈 Short-Term Stock Direction Predictor")
 
 ticker = st.text_input("Enter stock ticker (e.g., AAPL)", value="AAPL")
 
-
-        if ticker:
+if ticker:
     with st.spinner("Fetching and analyzing data..."):
         try:
             df = fetch_stock_data(ticker)
@@ -65,17 +62,15 @@ ticker = st.text_input("Enter stock ticker (e.g., AAPL)", value="AAPL")
         model, X_test, y_test, predictions = train_model(df)
         direction, confidence = predict_next_day(model, df)
 
-        
+    st.success(f"📊 Prediction: **{direction}** with **{confidence:.2f}%** confidence")
 
-    st.success(f"Prediction: **{direction}** with **{confidence:.2f}%** confidence")
-
-    st.subheader("Prediction vs Actual (Recent Days)")
+    st.subheader("🔍 Prediction vs Actual (Recent Days)")
     fig, ax = plt.subplots()
     ax.plot(y_test.values, label='Actual', marker='o')
     ax.plot(predictions, label='Predicted', marker='x')
     ax.set_title(f"Prediction Accuracy for {ticker}")
     ax.set_xlabel("Days")
-    ax.set_ylabel("Direction (1=Up, 0=Down)")
+    ax.set_ylabel("Direction (1 = Up, 0 = Down)")
     ax.legend()
     ax.grid()
     st.pyplot(fig)
