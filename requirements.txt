@@ -6,4 +6,4 @@ matplotlib
 scikit-learn
 nltk
 xgboost
-torch
+torch==1.13.1
