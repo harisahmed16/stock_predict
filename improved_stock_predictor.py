@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import requests
 import os
-import json
+import sqlite3
 from datetime import datetime, timedelta
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
@@ -18,8 +18,7 @@ nltk.data.path.append('/tmp')
 
 # --- CONFIG ---
 NEWS_API_KEY = st.secrets["news_api_key"]
-CACHE_DIR = "/tmp/news_cache"
-os.makedirs(CACHE_DIR, exist_ok=True)
+DB_PATH = "/tmp/sentiment_cache.db"
 
 TICKER_NAME_MAP = {
     "F": "Ford Motor",
@@ -31,6 +30,19 @@ TICKER_NAME_MAP = {
     "AMZN": "Amazon",
     "NFLX": "Netflix"
 }
+
+# --- SETUP SQLITE DB ---
+conn = sqlite3.connect(DB_PATH)
+cursor = conn.cursor()
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS sentiment_cache (
+        ticker TEXT,
+        date TEXT,
+        sentiment REAL,
+        PRIMARY KEY (ticker, date)
+    )
+''')
+conn.commit()
 
 # --- FUNCTIONS ---
 def fetch_stock_data(ticker, period="120d", horizon=1):
@@ -49,14 +61,12 @@ def fetch_sentiment(ticker, api_key, days=30):
 
     for i in range(days):
         date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
-        cache_file = os.path.join(CACHE_DIR, f"{ticker}_{date}.json")
 
-        if os.path.exists(cache_file):
-            with open(cache_file, "r") as f:
-                cached = json.load(f)
-                daily_score = cached.get("Sentiment", 0)
-                all_data.append({"Date": date, "Sentiment": daily_score})
-                continue
+        cursor.execute("SELECT sentiment FROM sentiment_cache WHERE ticker=? AND date=?", (ticker.upper(), date))
+        row = cursor.fetchone()
+        if row:
+            all_data.append({"Date": date, "Sentiment": row[0]})
+            continue
 
         url = (
             f"https://newsapi.org/v2/everything?q={query}&from={date}&to={date}&sortBy=publishedAt&language=en&apiKey={api_key}"
@@ -82,9 +92,11 @@ def fetch_sentiment(ticker, api_key, days=30):
         if not scores:
             st.warning(f"No news articles found for '{query}' on {date}.")
 
-        # Cache the result
-        with open(cache_file, "w") as f:
-            json.dump({"Sentiment": daily_score}, f)
+        cursor.execute(
+            "INSERT OR REPLACE INTO sentiment_cache (ticker, date, sentiment) VALUES (?, ?, ?)",
+            (ticker.upper(), date, daily_score)
+        )
+        conn.commit()
 
         all_data.append({"Date": date, "Sentiment": daily_score})
 
