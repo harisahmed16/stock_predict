@@ -35,12 +35,6 @@ def train_model(df):
     predictions = model.predict(X_test)
     return model, X_test, y_test, predictions
 
-#non-existent ticker
-try:
-    df = fetch_stock_data(ticker)
-except Exception as e:
-    st.error(f\"Failed to fetch data for {ticker}: {e}\")
-    st.stop()
 
 
 # Predict next day
@@ -58,12 +52,20 @@ st.title("Short-Term Stock Direction Predictor")
 
 ticker = st.text_input("Enter stock ticker (e.g., AAPL)", value="AAPL")
 
-if ticker:
+
+        if ticker:
     with st.spinner("Fetching and analyzing data..."):
-        df = fetch_stock_data(ticker)
+        try:
+            df = fetch_stock_data(ticker)
+        except Exception as e:
+            st.error(f"❌ Failed to fetch data for '{ticker}': {e}")
+            st.stop()
+
         df = prepare_data(df)
         model, X_test, y_test, predictions = train_model(df)
         direction, confidence = predict_next_day(model, df)
+
+        
 
     st.success(f"Prediction: **{direction}** with **{confidence:.2f}%** confidence")
 
