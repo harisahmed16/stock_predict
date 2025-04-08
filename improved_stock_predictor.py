@@ -91,6 +91,15 @@ if ticker:
     fig, ax = plt.subplots()
     ax.plot(y_test.index, y_test, label="Actual Price", marker='o')
     ax.plot(y_test.index, predictions, label="Predicted Price", marker='x')
+
+    # Optional: Show predicted price for tomorrow (next trading day)
+    if horizon == 1:
+        latest_returns = df['Returns'].iloc[-5:].values[::-1].reshape(1, -1)
+        future_date = df.index[-1] + pd.Timedelta(days=1)
+        next_pred = model.predict(latest_returns)[0]
+
+        ax.plot([future_date], [next_pred], marker='*', color='orange', markersize=12, label='Next Predicted Price')
+
     ax.set_title(f"{horizon}-Day Ahead Price Prediction using {model_name} for {ticker}")
     ax.set_xlabel("Date")
     ax.set_ylabel("Price (USD)")
