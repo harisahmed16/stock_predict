@@ -6,4 +6,5 @@ matplotlib
 scikit-learn
 nltk
 xgboost
-torch==1.13.1
+torch==2.0.1+cpu
+--extra-index-url https://download.pytorch.org/whl/cpu
