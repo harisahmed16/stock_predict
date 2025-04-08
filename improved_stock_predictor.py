@@ -102,11 +102,9 @@ if ticker:
             st.error(f"❌ Failed to fetch data: {e}")
             st.stop()
 
-        # Clean timezone
         price_df.index = price_df.index.tz_localize(None)
         sentiment_df.index = sentiment_df.index.tz_localize(None)
 
-        # Merge price + sentiment
         df = price_df.merge(sentiment_df, how="left", left_index=True, right_index=True)
         df["Sentiment"].fillna(0, inplace=True)
         df = prepare_data(df)
@@ -116,7 +114,6 @@ if ticker:
         r2 = r2_score(y_test, predictions)
         volatility_value, is_volatile = check_volatility(df)
 
-    # Results
     if is_volatile:
         st.warning(f"⚠️ High volatility detected (std dev = {volatility_value:.4f})")
     else:
@@ -156,7 +153,18 @@ if ticker:
     plt.xticks(rotation=45)
     st.pyplot(fig)
 
-    # Export
+    st.subheader("🧠 Sentiment Trend")
+    fig2, ax2 = plt.subplots()
+    ax2.plot(df.index, df["Sentiment"], color='purple', label='Daily Sentiment')
+    ax2.axhline(0, color='gray', linestyle='--')
+    ax2.set_title("Recent News Sentiment Trend")
+    ax2.set_xlabel("Date")
+    ax2.set_ylabel("Sentiment Score")
+    ax2.grid(True)
+    ax2.legend()
+    plt.xticks(rotation=45)
+    st.pyplot(fig2)
+
     export_df = pd.DataFrame({
         "Date": y_test.index.strftime('%Y-%m-%d'),
         "Actual_Price": y_test.values,
@@ -171,4 +179,5 @@ if ticker:
         file_name=f"{ticker}_{horizon}day_{model_name.replace(' ', '_').lower()}_with_sentiment.csv",
         mime="text/csv"
     )
+
 
