@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 import streamlit as st
 
@@ -23,14 +24,21 @@ def prepare_data(df):
     df.dropna(inplace=True)
     return df
 
-# Train model
-def train_model(df):
+# Train model based on user selection
+def train_model(df, model_name):
     X = df[[f'Lag{i}' for i in range(1, 6)]]
     y = df['Direction']
     split = int(len(df) * 0.8)
     X_train, X_test = X[:split], X[split:]
     y_train, y_test = y[:split], y[split:]
-    model = RandomForestClassifier(n_estimators=200, max_depth=10, random_state=42)
+
+    if model_name == "Random Forest":
+        model = RandomForestClassifier(n_estimators=200, max_depth=10, random_state=42)
+    elif model_name == "Logistic Regression":
+        model = LogisticRegression(max_iter=1000)
+    else:
+        raise ValueError("Unsupported model")
+
     model.fit(X_train, y_train)
     predictions = model.predict(X_test)
     return model, X_test, y_test, predictions
@@ -55,6 +63,7 @@ st.title("📈 Short-Term Stock Direction Predictor")
 
 ticker = st.text_input("Enter stock ticker (e.g., AAPL)", value="AAPL")
 horizon = st.selectbox("Prediction horizon (days ahead):", [1, 3, 5])
+model_name = st.selectbox("Choose prediction model:", ["Random Forest", "Logistic Regression"])
 
 if ticker:
     with st.spinner("Fetching and analyzing data..."):
@@ -65,7 +74,7 @@ if ticker:
             st.stop()
 
         df = prepare_data(df)
-        model, X_test, y_test, predictions = train_model(df)
+        model, X_test, y_test, predictions = train_model(df, model_name)
 
         # Volatility check
         volatility_value, is_volatile = check_volatility(df)
@@ -74,7 +83,7 @@ if ticker:
         direction, confidence = predict_next_day(model, df)
 
     # Display prediction
-    st.success(f"📊 {horizon}-Day Prediction: **{direction}** with **{confidence:.2f}%** confidence")
+    st.success(f"📊 {horizon}-Day Prediction using {model_name}: **{direction}** with **{confidence:.2f}%** confidence")
 
     # Display volatility warning/info
     if is_volatile:
@@ -87,7 +96,7 @@ if ticker:
     fig, ax = plt.subplots()
     ax.plot(y_test.values, label='Actual', marker='o')
     ax.plot(predictions, label='Predicted', marker='x')
-    ax.set_title(f"{horizon}-Day Ahead Prediction Accuracy for {ticker}")
+    ax.set_title(f"{horizon}-Day Ahead Prediction ({model_name}) for {ticker}")
     ax.set_xlabel("Days")
     ax.set_ylabel("Direction (1 = Up, 0 = Down)")
     ax.legend()
