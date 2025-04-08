@@ -102,9 +102,11 @@ if ticker:
     ax.legend()
     ax.grid()
     st.pyplot(fig)
-# Create exportable DataFrame
+# Create exportable DataFrame with closing prices
+# Match X_test.index to original df to get Close values
 export_df = pd.DataFrame({
     'Date': X_test.index.strftime('%Y-%m-%d'),
+    'Close': df.loc[X_test.index, 'Close'].values,
     'Actual': y_test.values,
     'Predicted': predictions
 })
