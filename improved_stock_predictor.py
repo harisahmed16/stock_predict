@@ -18,7 +18,7 @@ nltk.download("vader_lexicon", download_dir='/tmp')
 nltk.data.path.append('/tmp')
 
 # --- CONFIG ---
-NEWS_API_KEY = st.secrets["4147de8227744a4e80ec3c7cb194ff5d"]
+NEWS_API_KEY = st.secrets["news_api_key"]
 DB_PATH = "/tmp/sentiment_cache.db"
 
 TICKER_NAME_MAP = {
