@@ -51,25 +51,30 @@ def predict_next_day(model, df):
     print(f"\nNext-day prediction: {direction} with {confidence:.2f}% confidence.")
 
 # Main function
+import streamlit as st
+
 def main():
-    ticker = input("Enter stock ticker (e.g., AAPL): ").upper()
+    st.title("Short-Term Stock Direction Predictor")
+    ticker = st.text_input("Enter stock ticker (e.g., AAPL):", value="AAPL")
 
-    df = fetch_stock_data(ticker)
-    df = prepare_data(df)
-    model, X_test, y_test, predictions = train_model(df)
+    if ticker:
+        df = fetch_stock_data(ticker)
+        df = prepare_data(df)
+        model, X_test, y_test, predictions = train_model(df)
+        predict_next_day(model, df)
 
-    predict_next_day(model, df)
-
-    # Plot actual vs. predicted directions
-    plt.figure(figsize=(10, 5))
-    plt.plot(y_test.values, label='Actual', marker='o')
-    plt.plot(predictions, label='Predicted', marker='x')
-    plt.title(f'Short-term Direction Prediction for {ticker}')
-    plt.xlabel('Days')
-    plt.ylabel('Direction (1=Up, 0=Down)')
-    plt.legend()
-    plt.grid()
-    plt.show()
-
+        st.subheader("Actual vs. Predicted Directions")
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        ax.plot(y_test.values, label='Actual', marker='o')
+        ax.plot(predictions, label='Predicted', marker='x')
+        ax.set_xlabel('Days')
+        ax.set_ylabel('Direction (1=Up, 0=Down)')
+        ax.set_title(f'Short-term Direction Prediction for {ticker}')
+        ax.legend()
+        ax.grid()
+        st.pyplot(fig)
 if __name__ == "__main__":
     main()
+
+    
