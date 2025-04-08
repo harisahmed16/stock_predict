@@ -24,7 +24,7 @@ def prepare_data(df):
     df.dropna(inplace=True)
     return df
 
-# Train model based on user selection
+# Train model and return predictions + confidence
 def train_model(df, model_name):
     X = df[[f'Lag{i}' for i in range(1, 6)]]
     y = df['Direction']
@@ -41,9 +41,12 @@ def train_model(df, model_name):
 
     model.fit(X_train, y_train)
     predictions = model.predict(X_test)
-    return model, X_test, y_test, predictions
+    probabilities = model.predict_proba(X_test)
+    confidence_scores = probabilities.max(axis=1) * 100  # Confidence of predicted class
 
-# Predict future direction
+    return model, X_test, y_test, predictions, confidence_scores
+
+# Predict next day
 def predict_next_day(model, df):
     latest_features = df['Returns'].iloc[-5:].values[::-1].reshape(1, -1)
     prob = model.predict_proba(latest_features)[0]
@@ -74,7 +77,7 @@ if ticker:
             st.stop()
 
         df = prepare_data(df)
-        model, X_test, y_test, predictions = train_model(df, model_name)
+        model, X_test, y_test, predictions, confidence_scores = train_model(df, model_name)
 
         # Volatility check
         volatility_value, is_volatile = check_volatility(df)
@@ -102,21 +105,22 @@ if ticker:
     ax.legend()
     ax.grid()
     st.pyplot(fig)
-# Create exportable DataFrame with closing prices
-# Match X_test.index to original df to get Close values
-export_df = pd.DataFrame({
-    'Date': X_test.index.strftime('%Y-%m-%d'),
-    'Close': df.loc[X_test.index, 'Close'].values,
-    'Actual': y_test.values,
-    'Predicted': predictions
-})
 
-st.subheader("📤 Export Predictions")
-csv = export_df.to_csv(index=False).encode('utf-8')
-st.download_button(
-    label="Download CSV",
-    data=csv,
-    file_name=f"{ticker}_{horizon}day_{model_name.replace(' ', '_').lower()}_predictions.csv",
-    mime='text/csv'
-)
+    # Export predictions to CSV
+    export_df = pd.DataFrame({
+        'Date': X_test.index.strftime('%Y-%m-%d'),
+        'Close': df.loc[X_test.index, 'Close'].values,
+        'Actual': y_test.values,
+        'Predicted': predictions,
+        'Confidence (%)': confidence_scores.round(2)
+    })
+
+    st.subheader("📤 Export Predictions")
+    csv = export_df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="Download CSV",
+        data=csv,
+        file_name=f"{ticker}_{horizon}day_{model_name.replace(' ', '_').lower()}_predictions.csv",
+        mime='text/csv'
+    )
     
