@@ -7,12 +7,12 @@ from sklearn.metrics import classification_report
 import streamlit as st
 
 # Fetch stock data
-def fetch_stock_data(ticker, period="120d"):
+def fetch_stock_data(ticker, period="120d", horizon=1):
     stock = yf.Ticker(ticker)
     df = stock.history(period=period)
     df = df[['Close']]
     df['Returns'] = df['Close'].pct_change()
-    df['Direction'] = np.where(df['Returns'] > 0, 1, 0)
+    df['Direction'] = np.where(df['Close'].shift(-horizon) > df['Close'], 1, 0)
     df.dropna(inplace=True)
     return df
 
@@ -35,7 +35,7 @@ def train_model(df):
     predictions = model.predict(X_test)
     return model, X_test, y_test, predictions
 
-# Predict next day
+# Predict future direction
 def predict_next_day(model, df):
     latest_features = df['Returns'].iloc[-5:].values[::-1].reshape(1, -1)
     prob = model.predict_proba(latest_features)[0]
@@ -49,11 +49,12 @@ st.set_page_config(page_title="Stock Predictor", layout="centered")
 st.title("📈 Short-Term Stock Direction Predictor")
 
 ticker = st.text_input("Enter stock ticker (e.g., AAPL)", value="AAPL")
+horizon = st.selectbox("Prediction horizon (days ahead):", [1, 3, 5])
 
 if ticker:
     with st.spinner("Fetching and analyzing data..."):
         try:
-            df = fetch_stock_data(ticker)
+            df = fetch_stock_data(ticker, horizon=horizon)
         except Exception as e:
             st.error(f"❌ Failed to fetch data for '{ticker}': {e}")
             st.stop()
@@ -62,13 +63,13 @@ if ticker:
         model, X_test, y_test, predictions = train_model(df)
         direction, confidence = predict_next_day(model, df)
 
-    st.success(f"📊 Prediction: **{direction}** with **{confidence:.2f}%** confidence")
+    st.success(f"📊 {horizon}-Day Prediction: **{direction}** with **{confidence:.2f}%** confidence")
 
     st.subheader("🔍 Prediction vs Actual (Recent Days)")
     fig, ax = plt.subplots()
     ax.plot(y_test.values, label='Actual', marker='o')
     ax.plot(predictions, label='Predicted', marker='x')
-    ax.set_title(f"Prediction Accuracy for {ticker}")
+    ax.set_title(f"{horizon}-Day Ahead Prediction Accuracy for {ticker}")
     ax.set_xlabel("Days")
     ax.set_ylabel("Direction (1 = Up, 0 = Down)")
     ax.legend()
