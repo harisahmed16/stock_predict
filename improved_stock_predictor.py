@@ -42,7 +42,7 @@ def train_model(df, model_name):
     model.fit(X_train, y_train)
     predictions = model.predict(X_test)
     probabilities = model.predict_proba(X_test)
-    confidence_scores = probabilities.max(axis=1) * 100  # Confidence of predicted class
+    confidence_scores = probabilities.max(axis=1) * 100
 
     return model, X_test, y_test, predictions, confidence_scores
 
@@ -94,7 +94,7 @@ if ticker:
     else:
         st.info(f"✅ Volatility level is normal (std dev = {volatility_value:.4f}).")
 
-    # Plot results
+    # Plot predicted vs actual direction
     st.subheader("🔍 Prediction vs Actual (Recent Days)")
     fig, ax = plt.subplots()
     ax.plot(y_test.values, label='Actual', marker='o')
@@ -105,6 +105,32 @@ if ticker:
     ax.legend()
     ax.grid()
     st.pyplot(fig)
+
+    # Overlay predictions on closing price
+    st.subheader("📈 Closing Price with Prediction Overlay")
+    price_overlay_df = pd.DataFrame({
+        'Date': X_test.index,
+        'Close': df.loc[X_test.index, 'Close'],
+        'Prediction': predictions
+    })
+
+    fig2, ax2 = plt.subplots()
+    ax2.plot(price_overlay_df['Date'], price_overlay_df['Close'], label='Close Price', color='gray', linewidth=2)
+
+    # Add markers for predicted directions
+    up_days = price_overlay_df[price_overlay_df['Prediction'] == 1]
+    down_days = price_overlay_df[price_overlay_df['Prediction'] == 0]
+
+    ax2.scatter(up_days['Date'], up_days['Close'], color='green', label='Predicted UP', marker='^', zorder=5)
+    ax2.scatter(down_days['Date'], down_days['Close'], color='red', label='Predicted DOWN', marker='v', zorder=5)
+
+    ax2.set_title(f"{ticker} Closing Price with {model_name} Predictions")
+    ax2.set_xlabel("Date")
+    ax2.set_ylabel("Price")
+    ax2.legend()
+    ax2.grid(True)
+    plt.xticks(rotation=45)
+    st.pyplot(fig2)
 
     # Export predictions to CSV
     export_df = pd.DataFrame({
