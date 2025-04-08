@@ -74,7 +74,7 @@ def main():
         ax.legend()
         ax.grid()
         st.pyplot(fig)
-if __name__ == "__main__":
-    main()
+#if __name__ == "__main__":
+    #main()
 
     
