@@ -85,6 +85,13 @@ if ticker:
         # Make prediction
         direction, confidence = predict_next_day(model, df)
 
+        # Classification report
+        report = classification_report(y_test, predictions, output_dict=True)
+        accuracy = report["accuracy"] * 100
+        f1_up = report["1"]["f1-score"] * 100
+        precision_up = report["1"]["precision"] * 100
+        recall_up = report["1"]["recall"] * 100
+
     # Display prediction
     st.success(f"📊 {horizon}-Day Prediction using {model_name}: **{direction}** with **{confidence:.2f}%** confidence")
 
@@ -93,6 +100,13 @@ if ticker:
         st.warning(f"⚠️ High volatility detected (std dev = {volatility_value:.4f}). Prediction may be less reliable.")
     else:
         st.info(f"✅ Volatility level is normal (std dev = {volatility_value:.4f}).")
+
+    # Show performance metrics
+    st.subheader("📊 Model Performance Metrics")
+    st.write(f"**Accuracy:** {accuracy:.2f}%")
+    st.write(f"**Precision (UP predictions):** {precision_up:.2f}%")
+    st.write(f"**Recall (UP predictions):** {recall_up:.2f}%")
+    st.write(f"**F1 Score (UP predictions):** {f1_up:.2f}%")
 
     # Plot predicted vs actual direction
     st.subheader("🔍 Prediction vs Actual (Recent Days)")
@@ -117,7 +131,6 @@ if ticker:
     fig2, ax2 = plt.subplots()
     ax2.plot(price_overlay_df['Date'], price_overlay_df['Close'], label='Close Price', color='gray', linewidth=2)
 
-    # Add markers for predicted directions
     up_days = price_overlay_df[price_overlay_df['Prediction'] == 1]
     down_days = price_overlay_df[price_overlay_df['Prediction'] == 0]
 
@@ -149,4 +162,3 @@ if ticker:
         file_name=f"{ticker}_{horizon}day_{model_name.replace(' ', '_').lower()}_predictions.csv",
         mime='text/csv'
     )
-    
