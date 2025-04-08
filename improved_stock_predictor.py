@@ -35,6 +35,14 @@ def train_model(df):
     predictions = model.predict(X_test)
     return model, X_test, y_test, predictions
 
+#non-existent ticker
+try:
+    df = fetch_stock_data(ticker)
+except Exception as e:
+    st.error(f\"Failed to fetch data for {ticker}: {e}\")
+    st.stop()
+
+
 # Predict next day
 def predict_next_day(model, df):
     latest_features = df['Returns'].iloc[-5:].values[::-1].reshape(1, -1)
