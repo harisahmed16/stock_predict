@@ -102,3 +102,19 @@ if ticker:
     ax.legend()
     ax.grid()
     st.pyplot(fig)
+
+    # Create exportable DataFrame
+    export_df = pd.DataFrame({
+        'Date': X_test.index.strftime('%Y-%m-%d'),
+        'Actual': y_test.values,
+        'Predicted': predictions
+    })
+
+    st.subheader("📤 Export Predictions")
+    csv = export_df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="Download CSV",
+        data=csv,
+        file_name=f'{ticker}_{horizon}day_{model_name.replace(\" \", \"_\").lower()}_predictions.csv',
+        mime='text/csv'
+    )
