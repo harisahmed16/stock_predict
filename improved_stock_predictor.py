@@ -44,6 +44,11 @@ def predict_next_day(model, df):
     confidence = prob[prediction] * 100
     return direction, confidence
 
+# Volatility check
+def check_volatility(df, window=20, threshold=0.03):
+    recent_volatility = df['Returns'].iloc[-window:].std()
+    return recent_volatility, recent_volatility > threshold
+
 # Streamlit UI
 st.set_page_config(page_title="Stock Predictor", layout="centered")
 st.title("📈 Short-Term Stock Direction Predictor")
@@ -61,10 +66,23 @@ if ticker:
 
         df = prepare_data(df)
         model, X_test, y_test, predictions = train_model(df)
+
+        # Volatility check
+        volatility_value, is_volatile = check_volatility(df)
+
+        # Make prediction
         direction, confidence = predict_next_day(model, df)
 
+    # Display prediction
     st.success(f"📊 {horizon}-Day Prediction: **{direction}** with **{confidence:.2f}%** confidence")
 
+    # Display volatility warning/info
+    if is_volatile:
+        st.warning(f"⚠️ High volatility detected (std dev = {volatility_value:.4f}). Prediction may be less reliable.")
+    else:
+        st.info(f"✅ Volatility level is normal (std dev = {volatility_value:.4f}).")
+
+    # Plot results
     st.subheader("🔍 Prediction vs Actual (Recent Days)")
     fig, ax = plt.subplots()
     ax.plot(y_test.values, label='Actual', marker='o')
