@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, r2_score
+from xgboost import XGBRegressor
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import nltk
 import streamlit as st
@@ -17,7 +18,7 @@ nltk.download("vader_lexicon", download_dir='/tmp')
 nltk.data.path.append('/tmp')
 
 # --- CONFIG ---
-NEWS_API_KEY = st.secrets["news_api_key"]
+NEWS_API_KEY = st.secrets["4147de8227744a4e80ec3c7cb194ff5d"]
 DB_PATH = "/tmp/sentiment_cache.db"
 
 TICKER_NAME_MAP = {
@@ -123,6 +124,8 @@ def train_model(df, model_name):
         model = RandomForestRegressor(n_estimators=200, max_depth=10, random_state=42)
     elif model_name == "Linear Regression":
         model = LinearRegression()
+    elif model_name == "XGBoost":
+        model = XGBRegressor(n_estimators=200, max_depth=5, learning_rate=0.1, objective='reg:squarederror', random_state=42)
     else:
         raise ValueError("Unsupported model")
 
@@ -141,7 +144,7 @@ st.title("🧠 Stock Price Predictor with News Sentiment")
 
 ticker = st.text_input("Enter stock ticker (e.g., AAPL)", value="AAPL")
 horizon = st.selectbox("Predict how many days ahead:", [1, 3, 5])
-model_name = st.selectbox("Choose regression model:", ["Random Forest", "Linear Regression"])
+model_name = st.selectbox("Choose regression model:", ["Random Forest", "Linear Regression", "XGBoost"])
 show_clipped = st.toggle("🔒 Clip Next Prediction to +/-15% Range", value=True)
 
 if ticker:
