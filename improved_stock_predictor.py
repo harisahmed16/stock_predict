@@ -15,13 +15,12 @@ nltk.download("vader_lexicon", download_dir='/tmp')
 nltk.data.path.append('/tmp')
 
 # --- CONFIG ---
-NEWS_API_KEY = st.secrets["news_api_key"]  # You must store this in .streamlit/secrets.toml
+NEWS_API_KEY = st.secrets["news_api_key"]
 
-# --- Ticker to Name Map for Better NewsAPI Queries ---
 TICKER_NAME_MAP = {
     "F": "Ford Motor",
     "TSLA": "Tesla",
-    "AAPL": "Apple",
+    "AAPL": "Apple Inc.",
     "MSFT": "Microsoft",
     "GOOGL": "Google",
     "META": "Meta Platforms",
@@ -49,17 +48,26 @@ def fetch_sentiment(ticker, api_key, days=120):
         url = (
             f"https://newsapi.org/v2/everything?q={query}&from={date}&to={date}&sortBy=publishedAt&language=en&apiKey={api_key}"
         )
-        response = requests.get(url)
-        data = response.json()
+
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            data = response.json()
+        except requests.exceptions.RequestException as e:
+            st.warning(f"News API error on {date}: {e}")
+            continue
 
         scores = []
         if data.get("articles"):
             for article in data["articles"]:
-                title = article["title"]
+                title = article.get("title", "")
                 sentiment = sid.polarity_scores(title)["compound"]
                 scores.append(sentiment)
 
         daily_score = round(sum(scores) / len(scores), 3) if scores else 0
+        if not scores:
+            st.warning(f"No news articles found for '{query}' on {date}.")
+
         all_data.append({"Date": date, "Sentiment": daily_score})
 
     df = pd.DataFrame(all_data)
@@ -192,6 +200,7 @@ if ticker:
         file_name=f"{ticker}_{horizon}day_{model_name.replace(' ', '_').lower()}_with_sentiment.csv",
         mime="text/csv"
     )
+
 
 
 
