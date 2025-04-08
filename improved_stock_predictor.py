@@ -2,9 +2,9 @@ import yfinance as yf
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error, r2_score
 import streamlit as st
 
 # Fetch stock data
@@ -13,7 +13,7 @@ def fetch_stock_data(ticker, period="120d", horizon=1):
     df = stock.history(period=period)
     df = df[['Close']]
     df['Returns'] = df['Close'].pct_change()
-    df['Direction'] = np.where(df['Close'].shift(-horizon) > df['Close'], 1, 0)
+    df['Target'] = df['Close'].shift(-horizon)
     df.dropna(inplace=True)
     return df
 
@@ -24,36 +24,25 @@ def prepare_data(df):
     df.dropna(inplace=True)
     return df
 
-# Train model and return predictions + confidence
+# Train model and return predictions
 def train_model(df, model_name):
     X = df[[f'Lag{i}' for i in range(1, 6)]]
-    y = df['Direction']
+    y = df['Target']
     split = int(len(df) * 0.8)
     X_train, X_test = X[:split], X[split:]
     y_train, y_test = y[:split], y[split:]
 
     if model_name == "Random Forest":
-        model = RandomForestClassifier(n_estimators=200, max_depth=10, random_state=42)
-    elif model_name == "Logistic Regression":
-        model = LogisticRegression(max_iter=1000)
+        model = RandomForestRegressor(n_estimators=200, max_depth=10, random_state=42)
+    elif model_name == "Linear Regression":
+        model = LinearRegression()
     else:
         raise ValueError("Unsupported model")
 
     model.fit(X_train, y_train)
     predictions = model.predict(X_test)
-    probabilities = model.predict_proba(X_test)
-    confidence_scores = probabilities.max(axis=1) * 100
 
-    return model, X_test, y_test, predictions, confidence_scores
-
-# Predict next day
-def predict_next_day(model, df):
-    latest_features = df['Returns'].iloc[-5:].values[::-1].reshape(1, -1)
-    prob = model.predict_proba(latest_features)[0]
-    prediction = model.predict(latest_features)[0]
-    direction = "UP" if prediction == 1 else "DOWN"
-    confidence = prob[prediction] * 100
-    return direction, confidence
+    return model, X_test, y_test, predictions
 
 # Volatility check
 def check_volatility(df, window=20, threshold=0.03):
@@ -61,12 +50,12 @@ def check_volatility(df, window=20, threshold=0.03):
     return recent_volatility, recent_volatility > threshold
 
 # Streamlit UI
-st.set_page_config(page_title="Stock Predictor", layout="centered")
-st.title("📈 Short-Term Stock Direction Predictor")
+st.set_page_config(page_title="Stock Price Predictor", layout="centered")
+st.title("📈 Future Stock Price Predictor")
 
 ticker = st.text_input("Enter stock ticker (e.g., AAPL)", value="AAPL")
-horizon = st.selectbox("Prediction horizon (days ahead):", [1, 3, 5])
-model_name = st.selectbox("Choose prediction model:", ["Random Forest", "Logistic Regression"])
+horizon = st.selectbox("Predict how many days ahead:", [1, 3, 5])
+model_name = st.selectbox("Choose regression model:", ["Random Forest", "Linear Regression"])
 
 if ticker:
     with st.spinner("Fetching and analyzing data..."):
@@ -77,87 +66,44 @@ if ticker:
             st.stop()
 
         df = prepare_data(df)
-        model, X_test, y_test, predictions, confidence_scores = train_model(df, model_name)
+        model, X_test, y_test, predictions = train_model(df, model_name)
 
         # Volatility check
         volatility_value, is_volatile = check_volatility(df)
 
-        # Make prediction
-        direction, confidence = predict_next_day(model, df)
+        # Evaluate performance
+        mae = mean_absolute_error(y_test, predictions)
+        r2 = r2_score(y_test, predictions)
 
-        # Classification report
-        report = classification_report(y_test, predictions, output_dict=True)
-        accuracy = report["accuracy"] * 100
-        f1_up = report["1"]["f1-score"] * 100
-        precision_up = report["1"]["precision"] * 100
-        recall_up = report["1"]["recall"] * 100
-
-    # Display prediction
-    st.success(f"📊 {horizon}-Day Prediction using {model_name}: **{direction}** with **{confidence:.2f}%** confidence")
-
-    # Display volatility warning/info
+    # Display volatility
     if is_volatile:
-        st.warning(f"⚠️ High volatility detected (std dev = {volatility_value:.4f}). Prediction may be less reliable.")
+        st.warning(f"⚠️ High volatility detected (std dev = {volatility_value:.4f}). Price predictions may vary more.")
     else:
         st.info(f"✅ Volatility level is normal (std dev = {volatility_value:.4f}).")
 
     # Show performance metrics
     st.subheader("📊 Model Performance Metrics")
-    st.write(f"**Accuracy:** {accuracy:.2f}%")
-    st.write(f"**Precision (UP predictions):** {precision_up:.2f}%")
-    st.write(f"**Recall (UP predictions):** {recall_up:.2f}%")
-    st.write(f"**F1 Score (UP predictions):** {f1_up:.2f}%")
+    st.write(f"**Mean Absolute Error (MAE):** ${mae:.2f}")
+    st.write(f"**R² Score:** {r2:.4f}")
 
-    # Plot predicted vs actual direction
-    st.subheader("🔍 Prediction vs Actual (Recent Days)")
+    # Plot actual vs predicted prices
+    st.subheader("📈 Predicted vs Actual Prices")
     fig, ax = plt.subplots()
-    ax.plot(y_test.values, label='Actual', marker='o')
-    ax.plot(predictions, label='Predicted', marker='x')
-    ax.set_title(f"{horizon}-Day Ahead Prediction ({model_name}) for {ticker}")
-    ax.set_xlabel("Days")
-    ax.set_ylabel("Direction (1 = Up, 0 = Down)")
+    ax.plot(y_test.index, y_test, label="Actual Price", marker='o')
+    ax.plot(y_test.index, predictions, label="Predicted Price", marker='x')
+    ax.set_title(f"{horizon}-Day Ahead Price Prediction using {model_name} for {ticker}")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Price (USD)")
     ax.legend()
-    ax.grid()
-    st.pyplot(fig)
-
-    # Overlay predictions on closing price with error shading
-    st.subheader("📈 Closing Price with Prediction Overlay")
-    price_overlay_df = pd.DataFrame({
-        'Date': X_test.index,
-        'Close': df.loc[X_test.index, 'Close'],
-        'Prediction': predictions,
-        'Actual': y_test.values
-    })
-
-    fig2, ax2 = plt.subplots()
-    ax2.plot(price_overlay_df['Date'], price_overlay_df['Close'], label='Close Price', color='gray', linewidth=2)
-
-    up_days = price_overlay_df[price_overlay_df['Prediction'] == 1]
-    down_days = price_overlay_df[price_overlay_df['Prediction'] == 0]
-
-    ax2.scatter(up_days['Date'], up_days['Close'], color='green', label='Predicted UP', marker='^', zorder=5)
-    ax2.scatter(down_days['Date'], down_days['Close'], color='red', label='Predicted DOWN', marker='v', zorder=5)
-
-    # Highlight incorrect predictions
-    wrong_preds = price_overlay_df[price_overlay_df['Prediction'] != price_overlay_df['Actual']]
-    for idx, row in wrong_preds.iterrows():
-        ax2.axvspan(row['Date'], row['Date'], color='red', alpha=0.2, linewidth=0)
-
-    ax2.set_title(f"{ticker} Closing Price with {model_name} Predictions")
-    ax2.set_xlabel("Date")
-    ax2.set_ylabel("Price")
-    ax2.legend()
-    ax2.grid(True)
+    ax.grid(True)
     plt.xticks(rotation=45)
-    st.pyplot(fig2)
+    st.pyplot(fig)
 
     # Export predictions to CSV
     export_df = pd.DataFrame({
-        'Date': X_test.index.strftime('%Y-%m-%d'),
-        'Close': df.loc[X_test.index, 'Close'].values,
-        'Actual': y_test.values,
-        'Predicted': predictions,
-        'Confidence (%)': confidence_scores.round(2)
+        'Date': y_test.index.strftime('%Y-%m-%d'),
+        'Actual_Price': y_test.values,
+        'Predicted_Price': predictions
     })
 
     st.subheader("📤 Export Predictions")
@@ -165,6 +111,6 @@ if ticker:
     st.download_button(
         label="Download CSV",
         data=csv,
-        file_name=f"{ticker}_{horizon}day_{model_name.replace(' ', '_').lower()}_predictions.csv",
+        file_name=f"{ticker}_{horizon}day_{model_name.replace(' ', '_').lower()}_price_predictions.csv",
         mime='text/csv'
     )
