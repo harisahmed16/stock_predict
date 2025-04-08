@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import requests
+import os
+import json
 from datetime import datetime, timedelta
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
@@ -16,6 +18,8 @@ nltk.data.path.append('/tmp')
 
 # --- CONFIG ---
 NEWS_API_KEY = st.secrets["news_api_key"]
+CACHE_DIR = "/tmp/news_cache"
+os.makedirs(CACHE_DIR, exist_ok=True)
 
 TICKER_NAME_MAP = {
     "F": "Ford Motor",
@@ -38,13 +42,22 @@ def fetch_stock_data(ticker, period="120d", horizon=1):
     df.dropna(inplace=True)
     return df
 
-def fetch_sentiment(ticker, api_key, days=120):
+def fetch_sentiment(ticker, api_key, days=30):
     sid = SentimentIntensityAnalyzer()
     all_data = []
     query = TICKER_NAME_MAP.get(ticker.upper(), ticker)
 
     for i in range(days):
         date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+        cache_file = os.path.join(CACHE_DIR, f"{ticker}_{date}.json")
+
+        if os.path.exists(cache_file):
+            with open(cache_file, "r") as f:
+                cached = json.load(f)
+                daily_score = cached.get("Sentiment", 0)
+                all_data.append({"Date": date, "Sentiment": daily_score})
+                continue
+
         url = (
             f"https://newsapi.org/v2/everything?q={query}&from={date}&to={date}&sortBy=publishedAt&language=en&apiKey={api_key}"
         )
@@ -55,6 +68,7 @@ def fetch_sentiment(ticker, api_key, days=120):
             data = response.json()
         except requests.exceptions.RequestException as e:
             st.warning(f"News API error on {date}: {e}")
+            all_data.append({"Date": date, "Sentiment": 0})
             continue
 
         scores = []
@@ -67,6 +81,10 @@ def fetch_sentiment(ticker, api_key, days=120):
         daily_score = round(sum(scores) / len(scores), 3) if scores else 0
         if not scores:
             st.warning(f"No news articles found for '{query}' on {date}.")
+
+        # Cache the result
+        with open(cache_file, "w") as f:
+            json.dump({"Sentiment": daily_score}, f)
 
         all_data.append({"Date": date, "Sentiment": daily_score})
 
