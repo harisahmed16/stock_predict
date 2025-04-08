@@ -120,12 +120,13 @@ if ticker:
     ax.grid()
     st.pyplot(fig)
 
-    # Overlay predictions on closing price
+    # Overlay predictions on closing price with error shading
     st.subheader("📈 Closing Price with Prediction Overlay")
     price_overlay_df = pd.DataFrame({
         'Date': X_test.index,
         'Close': df.loc[X_test.index, 'Close'],
-        'Prediction': predictions
+        'Prediction': predictions,
+        'Actual': y_test.values
     })
 
     fig2, ax2 = plt.subplots()
@@ -136,6 +137,11 @@ if ticker:
 
     ax2.scatter(up_days['Date'], up_days['Close'], color='green', label='Predicted UP', marker='^', zorder=5)
     ax2.scatter(down_days['Date'], down_days['Close'], color='red', label='Predicted DOWN', marker='v', zorder=5)
+
+    # Highlight incorrect predictions
+    wrong_preds = price_overlay_df[price_overlay_df['Prediction'] != price_overlay_df['Actual']]
+    for idx, row in wrong_preds.iterrows():
+        ax2.axvspan(row['Date'], row['Date'], color='red', alpha=0.2, linewidth=0)
 
     ax2.set_title(f"{ticker} Closing Price with {model_name} Predictions")
     ax2.set_xlabel("Date")
