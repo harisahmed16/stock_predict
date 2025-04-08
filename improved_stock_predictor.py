@@ -10,10 +10,8 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, r2_score
 from xgboost import XGBRegressor
-from lstm_model import LSTMRegressor, prepare_lstm_data, train_lstm_model, predict_lstm
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import nltk
-import torch
 import streamlit as st
 
 nltk.download("vader_lexicon", download_dir='/tmp')
@@ -113,37 +111,126 @@ def prepare_data(df):
     return df
 
 def train_model(df, model_name):
-    if model_name == "LSTM":
-        feature_cols = ["Returns", "Sentiment"]
-        df_lstm = df.copy()
-        X, y = prepare_lstm_data(df_lstm, feature_cols, "Target", sequence_length=10)
-        split = int(len(X) * 0.8)
-        X_train, X_test = X[:split], X[split:]
-        y_train, y_test = y[:split], y[split:]
-        model = train_lstm_model(X_train, y_train, input_size=X.shape[2], epochs=20)
-        predictions = predict_lstm(model, X_test)
-        return model, X_test, y_test, predictions
+    df = prepare_data(df)
+    X = df[[f"Lag{i}" for i in range(1, 6)] + [f"Sentiment_Lag{i}" for i in range(1, 6)]]
+    y = df["Target"]
+    split = int(len(df) * 0.8)
+    X_train, X_test = X[:split], X[split:]
+    y_train, y_test = y[:split], y[split:]
+
+    if model_name == "Random Forest":
+        model = RandomForestRegressor(n_estimators=200, max_depth=10, random_state=42)
+    elif model_name == "Linear Regression":
+        model = LinearRegression()
+    elif model_name == "XGBoost":
+        model = XGBRegressor(n_estimators=200, max_depth=5, learning_rate=0.1, objective='reg:squarederror', random_state=42)
     else:
-        df = prepare_data(df)
-        X = df[[f"Lag{i}" for i in range(1, 6)] + [f"Sentiment_Lag{i}" for i in range(1, 6)]]
-        y = df["Target"]
-        split = int(len(df) * 0.8)
-        X_train, X_test = X[:split], X[split:]
-        y_train, y_test = y[:split], y[split:]
+        raise ValueError("Unsupported model")
 
-        if model_name == "Random Forest":
-            model = RandomForestRegressor(n_estimators=200, max_depth=10, random_state=42)
-        elif model_name == "Linear Regression":
-            model = LinearRegression()
-        elif model_name == "XGBoost":
-            model = XGBRegressor(n_estimators=200, max_depth=5, learning_rate=0.1, objective='reg:squarederror', random_state=42)
-        else:
-            raise ValueError("Unsupported model")
+    model.fit(X_train, y_train)
+    predictions = model.predict(X_test)
 
-        model.fit(X_train, y_train)
-        predictions = model.predict(X_test)
+    return model, X_test, y_test, predictions
 
-        return model, X_test, y_test, predictions
+def check_volatility(df, window=20, threshold=0.03):
+    recent_volatility = df["Returns"].iloc[-window:].std()
+    return recent_volatility, recent_volatility > threshold
+
+# --- STREAMLIT UI ---
+st.set_page_config(page_title="Stock Price Predictor + News Sentiment", layout="centered")
+st.title("🧠 Stock Price Predictor with News Sentiment")
+
+ticker = st.text_input("Enter stock ticker (e.g., AAPL)", value="AAPL")
+horizon = st.selectbox("Predict how many days ahead:", [1, 3, 5])
+model_name = st.selectbox("Choose regression model:", ["Random Forest", "Linear Regression", "XGBoost"])
+show_clipped = st.toggle("🔒 Clip Next Prediction to +/-15% Range", value=True)
+
+if ticker:
+    with st.spinner("Fetching stock and news sentiment data..."):
+        try:
+            price_df = fetch_stock_data(ticker, horizon=horizon)
+            sentiment_df = fetch_sentiment(ticker, NEWS_API_KEY, days=30)
+        except Exception as e:
+            st.error(f"❌ Failed to fetch data: {e}")
+            st.stop()
+
+        price_df.index = price_df.index.tz_localize(None)
+        sentiment_df.index = sentiment_df.index.tz_localize(None)
+
+        df = price_df.merge(sentiment_df, how="left", left_index=True, right_index=True)
+        df["Sentiment"].fillna(0, inplace=True)
+
+        model, X_test, y_test, predictions = train_model(df, model_name)
+        mae = mean_absolute_error(y_test, predictions)
+        r2 = r2_score(y_test, predictions)
+        volatility_value, is_volatile = check_volatility(df)
+
+    if is_volatile:
+        st.warning(f"⚠️ High volatility detected (std dev = {volatility_value:.4f})")
+    else:
+        st.info(f"✅ Volatility is normal (std dev = {volatility_value:.4f})")
+
+    st.subheader("📊 Model Performance")
+    st.write(f"**Mean Absolute Error (MAE):** ${mae:.2f}")
+    st.write(f"**R² Score:** {r2:.4f}")
+
+    st.subheader("📈 Actual vs Predicted Prices")
+    fig, ax = plt.subplots()
+    ax.plot(y_test.index, y_test, label="Actual", marker="o")
+    ax.plot(y_test.index, predictions, label="Predicted", marker="x")
+
+    if horizon == 1:
+        latest_row = df.iloc[-1:]
+        X_latest = latest_row[[f"Lag{i}" for i in range(1, 6)] + [f"Sentiment_Lag{i}" for i in range(1, 6)]]
+        next_date = df.index[-1] + pd.Timedelta(days=1)
+        next_pred = model.predict(X_latest)[0]
+
+        recent_close = df['Close'].iloc[-1]
+        lower = recent_close * 0.85
+        upper = recent_close * 1.15
+
+        clipped_pred = np.clip(next_pred, lower, upper)
+
+        if show_clipped and clipped_pred != next_pred:
+            st.warning(f"🟠 Raw prediction (${next_pred:.2f}) clipped to ${clipped_pred:.2f} to stay within 15% of recent close (${recent_close:.2f})")
+            next_pred = clipped_pred
+
+        ax.plot([next_date], [next_pred], marker='*', color='orange', markersize=12, label='Next Predicted Price')
+
+    ax.set_title(f"{horizon}-Day Ahead Price Prediction with {model_name}")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Price (USD)")
+    ax.legend()
+    ax.grid(True)
+    plt.xticks(rotation=45)
+    st.pyplot(fig)
+
+    st.subheader("🧠 Sentiment Trend")
+    fig2, ax2 = plt.subplots()
+    ax2.plot(df.index, df["Sentiment"], color='purple', label='Daily Sentiment')
+    ax2.axhline(0, color='gray', linestyle='--')
+    ax2.set_title("Recent News Sentiment Trend")
+    ax2.set_xlabel("Date")
+    ax2.set_ylabel("Sentiment Score")
+    ax2.grid(True)
+    ax2.legend()
+    plt.xticks(rotation=45)
+    st.pyplot(fig2)
+
+    export_df = pd.DataFrame({
+        "Date": y_test.index.strftime('%Y-%m-%d'),
+        "Actual_Price": y_test.values,
+        "Predicted_Price": predictions
+    })
+
+    st.subheader("📤 Export Predictions")
+    csv = export_df.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="Download CSV",
+        data=csv,
+        file_name=f"{ticker}_{horizon}day_{model_name.replace(' ', '_').lower()}_with_sentiment.csv",
+        mime="text/csv"
+    )
 
 
 
