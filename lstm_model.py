@@ -35,7 +35,7 @@ def train_lstm_model(X_train, y_train, input_size, epochs=20, lr=0.001):
         loss.backward()
         optimizer.step()
         if epoch % 5 == 0:
-            print(f\"Epoch {epoch}, Loss: {loss.item():.4f}\")
+            print(f"Epoch {epoch}, Loss: {loss.item():.4f}")
 
     return model
 
