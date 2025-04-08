@@ -17,6 +17,18 @@ nltk.data.path.append('/tmp')
 # --- CONFIG ---
 NEWS_API_KEY = st.secrets["news_api_key"]  # You must store this in .streamlit/secrets.toml
 
+# --- Ticker to Name Map for Better NewsAPI Queries ---
+TICKER_NAME_MAP = {
+    "F": "Ford Motor",
+    "TSLA": "Tesla",
+    "AAPL": "Apple",
+    "MSFT": "Microsoft",
+    "GOOGL": "Google",
+    "META": "Meta Platforms",
+    "AMZN": "Amazon",
+    "NFLX": "Netflix"
+}
+
 # --- FUNCTIONS ---
 def fetch_stock_data(ticker, period="120d", horizon=1):
     stock = yf.Ticker(ticker)
@@ -30,11 +42,12 @@ def fetch_stock_data(ticker, period="120d", horizon=1):
 def fetch_sentiment(ticker, api_key, days=120):
     sid = SentimentIntensityAnalyzer()
     all_data = []
+    query = TICKER_NAME_MAP.get(ticker.upper(), ticker)
 
     for i in range(days):
         date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
         url = (
-            f"https://newsapi.org/v2/everything?q={ticker}&from={date}&to={date}&sortBy=publishedAt&language=en&apiKey={api_key}"
+            f"https://newsapi.org/v2/everything?q={query}&from={date}&to={date}&sortBy=publishedAt&language=en&apiKey={api_key}"
         )
         response = requests.get(url)
         data = response.json()
@@ -179,5 +192,6 @@ if ticker:
         file_name=f"{ticker}_{horizon}day_{model_name.replace(' ', '_').lower()}_with_sentiment.csv",
         mime="text/csv"
     )
+
 
 
