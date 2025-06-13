@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import requests
-import os
 import sqlite3
 import time
 from datetime import datetime, timedelta
@@ -121,7 +120,6 @@ def prepare_data(df):
     return df
 
 def train_model(df, model_name):
-    df = prepare_data(df)
     X = df[[f"Lag{i}" for i in range(1, 6)] + [f"Sentiment_Lag{i}" for i in range(1, 6)]]
     y = df["Target"]
     split = int(len(df) * 0.8)
@@ -170,7 +168,8 @@ if ticker:
         df = price_df.merge(sentiment_df, how="left", left_index=True, right_index=True)
         df["Sentiment"].fillna(0, inplace=True)
 
-        model, X_test, y_test, predictions = train_model(df, model_name)
+        prepared_df = prepare_data(df.copy())
+        model, X_test, y_test, predictions = train_model(prepared_df, model_name)
         mae = mean_absolute_error(y_test, predictions)
         r2 = r2_score(y_test, predictions)
         volatility_value, is_volatile = check_volatility(df)
@@ -190,9 +189,9 @@ if ticker:
     ax.plot(y_test.index, predictions, label="Predicted", marker="x")
 
     if horizon == 1:
-        latest_row = df.iloc[-1:]
+        latest_row = prepared_df.iloc[-1:]
         X_latest = latest_row[[f"Lag{i}" for i in range(1, 6)] + [f"Sentiment_Lag{i}" for i in range(1, 6)]]
-        next_date = df.index[-1] + pd.Timedelta(days=1)
+        next_date = prepared_df.index[-1] + pd.Timedelta(days=1)
         next_pred = model.predict(X_latest)[0]
 
         recent_close = df['Close'].iloc[-1]

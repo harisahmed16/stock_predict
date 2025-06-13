@@ -43,7 +43,7 @@ news_api_key = "your_newsapi_key_here"
 
 ### 4. Run the app
 ```bash
-streamlit run streamlit_app.py
+streamlit run improved_stock_predictor.py
 ```
 
 ---
